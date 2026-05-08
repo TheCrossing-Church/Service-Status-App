@@ -6,7 +6,7 @@ import express, {
 } from "express";
 import helmet from "helmet";
 import { ZodError } from "zod";
-import { pool } from "./db.js";
+import { db } from "./db.js";
 import { env } from "./env.js";
 import { HttpError } from "./lib/httpError.js";
 import { adminRouter } from "./routes/admin.js";
@@ -54,7 +54,17 @@ app.use((_req, res, next) => {
   next();
 });
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) => {
+  // Verify DB connectivity beyond just the process being up.
+  try {
+    const row = db.prepare("SELECT 1 AS ok").get() as { ok: number } | undefined;
+    if (row?.ok !== 1) throw new Error("db check returned unexpected value");
+    res.json({ success: true, data: { ok: true } });
+  } catch (err) {
+    console.error("[health] db check failed", err);
+    res.status(503).json({ success: false, error: "db unhealthy" });
+  }
+});
 
 app.get("/robots.txt", (_req, res) => {
   res.type("text/plain").send("User-agent: *\nDisallow: /\n");
@@ -68,20 +78,24 @@ app.use("/api", subscribersRouter);
 app.use("/api/admin", adminRouter);
 
 app.use((_req: Request, res: Response, _next: NextFunction) => {
-  res.status(404).json({ error: "Not found" });
+  res.status(404).json({ success: false, error: "Not found" });
 });
 
 const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof ZodError) {
-    res.status(400).json({ error: "Invalid request", details: err.flatten() });
+    res
+      .status(400)
+      .json({ success: false, error: "Invalid request", details: err.flatten() });
     return;
   }
   if (err instanceof HttpError) {
-    res.status(err.status).json({ error: err.message, details: err.details });
+    res
+      .status(err.status)
+      .json({ success: false, error: err.message, details: err.details });
     return;
   }
   console.error("[error]", err);
-  res.status(500).json({ error: "Internal server error" });
+  res.status(500).json({ success: false, error: "Internal server error" });
 };
 app.use(errorHandler);
 
@@ -92,7 +106,8 @@ const server = app.listen(env.port, () => {
 function shutdown(signal: string): void {
   console.log(`[server] received ${signal}, shutting down`);
   server.close(() => {
-    pool.end().finally(() => process.exit(0));
+    db.close();
+    process.exit(0);
   });
 }
 process.on("SIGINT", () => shutdown("SIGINT"));

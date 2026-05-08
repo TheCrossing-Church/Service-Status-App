@@ -33,7 +33,7 @@ sendRouter.post(
 
     let statusTypeId: number | null = null;
     if (body.status_type_id) {
-      const { rows } = await pool.query<{ id: number; active: boolean }>(
+      const { rows } = await pool.query<{ id: number; active: number }>(
         `SELECT id, active FROM status_types
           WHERE id = $1 AND campus_id = $2`,
         [body.status_type_id, campus.id],
@@ -42,7 +42,7 @@ sendRouter.post(
       if (!rows[0].active) throw badRequest("Status type is inactive");
       statusTypeId = rows[0].id;
     } else if (body.status_slug) {
-      const { rows } = await pool.query<{ id: number; active: boolean }>(
+      const { rows } = await pool.query<{ id: number; active: number }>(
         `SELECT id, active FROM status_types
           WHERE slug = $1 AND campus_id = $2`,
         [body.status_slug, campus.id],
@@ -61,6 +61,6 @@ sendRouter.post(
       sentVia: "web",
       sentByUserId: req.user!.id,
     });
-    res.status(201).json(result);
+    res.status(201).json({ success: true, data: result });
   }),
 );

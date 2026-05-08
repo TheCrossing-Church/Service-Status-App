@@ -1,14 +1,14 @@
 import bcrypt from "bcrypt";
 import crypto from "node:crypto";
-import { pool, withTransaction } from "../src/db.js";
+import { db, pool, withTransaction } from "../src/db.js";
 
-// Names + slugs sourced from CLAUDE.md. Codes (CFD/FEN/GRT/MID) aren't
-// modeled as a separate column yet — add one if Rock RMS sync needs it.
+const NOW_SQL = "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))";
+
 const CAMPUSES = [
-  { slug: "chesterfield", name: "Chesterfield" },
-  { slug: "fenton", name: "Fenton" },
-  { slug: "grants-trail", name: "Grant's Trail" },
-  { slug: "mid-rivers", name: "Mid Rivers" },
+  { slug: "chesterfield", name: "Chesterfield", code: "CFD" },
+  { slug: "fenton", name: "Fenton", code: "FEN" },
+  { slug: "grants-trail", name: "Grant's Trail", code: "GRT" },
+  { slug: "mid-rivers", name: "Mid Rivers", code: "MID" },
 ];
 
 const DEFAULT_STATUS_TYPES = [
@@ -45,7 +45,8 @@ const DEFAULT_GROUPS = [
 ];
 
 async function seed(): Promise<void> {
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMeNow!";
+  // `||` (not `??`) so an empty SEED_ADMIN_PASSWORD env value falls back too.
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || "ChangeMeNow!";
   const adminPasswordHash = await bcrypt.hash(adminPassword, 12);
 
   await withTransaction(async (client) => {
@@ -53,11 +54,14 @@ async function seed(): Promise<void> {
     const campusIds = new Map<string, number>();
     for (const c of CAMPUSES) {
       const { rows } = await client.query<{ id: number }>(
-        `INSERT INTO campuses (slug, name)
-         VALUES ($1, $2)
-         ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+        `INSERT INTO campuses (slug, name, code)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (slug) DO UPDATE
+           SET name = excluded.name,
+               code = excluded.code,
+               updated_at = ${NOW_SQL}
          RETURNING id`,
-        [c.slug, c.name],
+        [c.slug, c.name, c.code],
       );
       campusIds.set(c.slug, rows[0]!.id);
     }
@@ -96,8 +100,8 @@ async function seed(): Promise<void> {
       `INSERT INTO users (username, email, display_name, role, password_hash)
        VALUES ($1, $2, $3, 'admin', $4)
        ON CONFLICT (username) DO UPDATE
-         SET password_hash = EXCLUDED.password_hash,
-             updated_at = now()
+         SET password_hash = excluded.password_hash,
+             updated_at = ${NOW_SQL}
        RETURNING id`,
       ["admin", "it@thecrossing.church", "IT Admin", adminPasswordHash],
     );
@@ -120,8 +124,8 @@ async function seed(): Promise<void> {
         `INSERT INTO users (username, display_name, role, password_hash)
          VALUES ($1, $2, 'sender', $3)
          ON CONFLICT (username) DO UPDATE
-           SET password_hash = EXCLUDED.password_hash,
-               updated_at = now()
+           SET password_hash = excluded.password_hash,
+               updated_at = ${NOW_SQL}
          RETURNING id`,
         [senderUsername, `${slug} Sender`, adminPasswordHash],
       );
@@ -138,8 +142,8 @@ async function seed(): Promise<void> {
       `INSERT INTO subscribers (email, display_name, unsubscribe_token)
        VALUES ($1, $2, $3)
        ON CONFLICT (email) DO UPDATE
-         SET display_name = EXCLUDED.display_name,
-             updated_at = now()
+         SET display_name = excluded.display_name,
+             updated_at = ${NOW_SQL}
        RETURNING id`,
       [
         "demo@thecrossing.church",
@@ -170,8 +174,9 @@ async function seed(): Promise<void> {
 }
 
 seed()
-  .then(() => pool.end())
+  .then(() => db.close())
   .catch((err) => {
     console.error("[seed] failed", err);
-    pool.end().finally(() => process.exit(1));
+    db.close();
+    process.exit(1);
   });

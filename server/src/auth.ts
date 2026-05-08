@@ -50,18 +50,38 @@ export function verifyUserToken(token: string): number | null {
 }
 
 export async function loadUser(userId: number): Promise<CurrentUser | null> {
-  const { rows } = await pool.query<CurrentUser>(
-    `SELECT u.id, u.username, u.email, u.display_name, u.role, u.active,
-            COALESCE(
-              (SELECT array_agg(uc.campus_id ORDER BY uc.campus_id)
-                 FROM user_campuses uc WHERE uc.user_id = u.id),
-              ARRAY[]::int[]
-            ) AS campus_ids
-       FROM users u
-      WHERE u.id = $1`,
+  // SQLite has no array_agg, so we fetch user + campus assignments in two
+  // queries instead of one. The cost is negligible at our scale.
+  const { rows } = await pool.query<{
+    id: number;
+    username: string;
+    email: string | null;
+    display_name: string;
+    role: "admin" | "sender";
+    active: number;
+  }>(
+    `SELECT id, username, email, display_name, role, active
+       FROM users WHERE id = $1`,
     [userId],
   );
-  return rows[0] ?? null;
+  const u = rows[0];
+  if (!u) return null;
+
+  const { rows: campuses } = await pool.query<{ campus_id: number }>(
+    `SELECT campus_id FROM user_campuses
+      WHERE user_id = $1 ORDER BY campus_id`,
+    [userId],
+  );
+
+  return {
+    id: u.id,
+    username: u.username,
+    email: u.email,
+    display_name: u.display_name,
+    role: u.role,
+    active: Boolean(u.active),
+    campus_ids: campuses.map((c) => c.campus_id),
+  };
 }
 
 function bearerFrom(req: Request): string | null {

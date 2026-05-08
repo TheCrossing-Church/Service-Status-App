@@ -1,32 +1,34 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { pool } from "../src/db.js";
+import { db } from "../src/db.js";
 
 // Resolve from cwd so this works in both layouts: local (run from server/)
 // and the prod container (WORKDIR /app, with /app/migrations alongside dist/).
 const migrationsDir = path.resolve(process.cwd(), "migrations");
 
-async function ensureMigrationsTable(): Promise<void> {
+function ensureMigrationsTable(): void {
   // The first migration creates the canonical table; this guard handles
   // re-runs and the bootstrap case where no migrations have been applied yet.
-  await pool.query(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       filename   TEXT PRIMARY KEY,
-      applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
     )
   `);
 }
 
-async function appliedFilenames(): Promise<Set<string>> {
-  const { rows } = await pool.query<{ filename: string }>(
-    "SELECT filename FROM schema_migrations",
-  );
+function appliedFilenames(): Set<string> {
+  const rows = db
+    .prepare<unknown[], { filename: string }>(
+      "SELECT filename FROM schema_migrations",
+    )
+    .all();
   return new Set(rows.map((r) => r.filename));
 }
 
 async function run(): Promise<void> {
-  await ensureMigrationsTable();
-  const applied = await appliedFilenames();
+  ensureMigrationsTable();
+  const applied = appliedFilenames();
 
   const all = (await fs.readdir(migrationsDir))
     .filter((f) => f.endsWith(".sql"))
@@ -41,15 +43,17 @@ async function run(): Promise<void> {
   for (const filename of pending) {
     const sql = await fs.readFile(path.join(migrationsDir, filename), "utf8");
     console.log(`[migrate] applying ${filename}`);
-    const client = await pool.connect();
+    // Wrap in a transaction so a partial migration rolls back cleanly.
+    db.exec("BEGIN");
     try {
-      await client.query(sql);
-      await client.query(
-        "INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING",
-        [filename],
-      );
-    } finally {
-      client.release();
+      db.exec(sql);
+      db.prepare(
+        "INSERT OR IGNORE INTO schema_migrations (filename) VALUES (?)",
+      ).run(filename);
+      db.exec("COMMIT");
+    } catch (err) {
+      db.exec("ROLLBACK");
+      throw err;
     }
   }
 
@@ -57,8 +61,9 @@ async function run(): Promise<void> {
 }
 
 run()
-  .then(() => pool.end())
+  .then(() => db.close())
   .catch((err) => {
     console.error("[migrate] failed", err);
-    pool.end().finally(() => process.exit(1));
+    db.close();
+    process.exit(1);
   });

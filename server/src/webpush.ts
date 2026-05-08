@@ -37,9 +37,9 @@ async function recipientsForCampus(campusId: number): Promise<Recipient[]> {
   const { rows } = await pool.query<Recipient>(
     `SELECT DISTINCT ps.id, ps.endpoint, ps.p256dh, ps.auth
        FROM push_subscriptions ps
-       JOIN subscribers s ON s.id = ps.subscriber_id AND s.active = TRUE
+       JOIN subscribers s ON s.id = ps.subscriber_id AND s.active = 1
        JOIN subscriber_memberships sm ON sm.subscriber_id = s.id
-       JOIN subscriber_groups g ON g.id = sm.group_id AND g.active = TRUE
+       JOIN subscriber_groups g ON g.id = sm.group_id AND g.active = 1
       WHERE g.campus_id = $1`,
     [campusId],
   );
@@ -94,9 +94,11 @@ export async function sendPushForCampus(
   );
 
   if (deadEndpointIds.length > 0) {
+    // SQLite has no array params; expand to IN (?, ?, …) at the call site.
+    const placeholders = deadEndpointIds.map((_, i) => `$${i + 1}`).join(", ");
     await pool.query(
-      "DELETE FROM push_subscriptions WHERE id = ANY($1::int[])",
-      [deadEndpointIds],
+      `DELETE FROM push_subscriptions WHERE id IN (${placeholders})`,
+      deadEndpointIds,
     );
   }
 

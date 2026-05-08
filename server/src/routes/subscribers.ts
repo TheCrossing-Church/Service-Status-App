@@ -22,15 +22,22 @@ subscribersRouter.post(
     // reject the whole request cleanly if any combination is invalid.
     const requestedGroupIds: number[] = [];
     for (const m of body.memberships) {
-      const { rows } = await pool.query<{ group_id: number; group_slug: string }>(
+      // SQLite has no array params, so we expand the slug list inline.
+      const slugPlaceholders = m.group_slugs
+        .map((_, i) => `$${i + 2}`)
+        .join(", ");
+      const { rows } = await pool.query<{
+        group_id: number;
+        group_slug: string;
+      }>(
         `SELECT g.id AS group_id, g.slug AS group_slug
            FROM subscriber_groups g
            JOIN campuses c ON c.id = g.campus_id
           WHERE c.slug = $1
-            AND g.slug = ANY($2::text[])
-            AND g.active = TRUE
-            AND c.active = TRUE`,
-        [m.campus_slug, m.group_slugs],
+            AND g.slug IN (${slugPlaceholders})
+            AND g.active = 1
+            AND c.active = 1`,
+        [m.campus_slug, ...m.group_slugs],
       );
       const found = new Set(rows.map((r) => r.group_slug));
       const missing = m.group_slugs.filter((s) => !found.has(s));
@@ -50,9 +57,9 @@ subscribersRouter.post(
         `INSERT INTO subscribers (email, display_name, unsubscribe_token)
          VALUES ($1, $2, $3)
          ON CONFLICT (email) DO UPDATE
-           SET display_name = EXCLUDED.display_name,
-               active = TRUE,
-               updated_at = now()
+           SET display_name = excluded.display_name,
+               active = 1,
+               updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
          RETURNING id, unsubscribe_token`,
         [
           body.email.toLowerCase(),
@@ -69,22 +76,29 @@ subscribersRouter.post(
         [sub.id],
       );
       if (requestedGroupIds.length > 0) {
+        // Multi-row VALUES (since SQLite has no unnest).
+        const valuesSql = requestedGroupIds
+          .map((_, i) => `($1, $${i + 2})`)
+          .join(", ");
         await client.query(
           `INSERT INTO subscriber_memberships (subscriber_id, group_id)
-             SELECT $1, g FROM unnest($2::int[]) AS g
+           VALUES ${valuesSql}
            ON CONFLICT DO NOTHING`,
-          [sub.id, requestedGroupIds],
+          [sub.id, ...requestedGroupIds],
         );
       }
       return sub;
     });
 
     res.status(201).json({
-      subscriber: {
-        id: subscriber.id,
-        email: body.email.toLowerCase(),
-        display_name: body.display_name,
-        unsubscribe_token: subscriber.unsubscribe_token,
+      success: true,
+      data: {
+        subscriber: {
+          id: subscriber.id,
+          email: body.email.toLowerCase(),
+          display_name: body.display_name,
+          unsubscribe_token: subscriber.unsubscribe_token,
+        },
       },
     });
   }),
@@ -97,7 +111,7 @@ subscribersRouter.post(
   asyncHandler(async (req, res) => {
     const body = pushSubscriptionSchema.parse(req.body);
     const { rows } = await pool.query<{ id: number }>(
-      `SELECT id FROM subscribers WHERE email = $1 AND active = TRUE`,
+      `SELECT id FROM subscribers WHERE email = $1 AND active = 1`,
       [body.email.toLowerCase()],
     );
     const subscriber = rows[0];
@@ -108,11 +122,11 @@ subscribersRouter.post(
          (subscriber_id, endpoint, p256dh, auth, user_agent)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (endpoint) DO UPDATE
-         SET subscriber_id = EXCLUDED.subscriber_id,
-             p256dh = EXCLUDED.p256dh,
-             auth = EXCLUDED.auth,
-             user_agent = EXCLUDED.user_agent,
-             last_seen_at = now()`,
+         SET subscriber_id = excluded.subscriber_id,
+             p256dh = excluded.p256dh,
+             auth = excluded.auth,
+             user_agent = excluded.user_agent,
+             last_seen_at = (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
       [
         subscriber.id,
         body.endpoint,
@@ -122,7 +136,7 @@ subscribersRouter.post(
       ],
     );
 
-    res.status(201).json({ ok: true });
+    res.status(201).json({ success: true, data: { ok: true } });
   }),
 );
 
@@ -134,11 +148,13 @@ subscribersRouter.post(
     const token = String(req.body?.token ?? "");
     if (!token) throw badRequest("token is required");
     const { rowCount } = await pool.query(
-      `UPDATE subscribers SET active = FALSE, updated_at = now()
+      `UPDATE subscribers
+          SET active = 0,
+              updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
         WHERE unsubscribe_token = $1`,
       [token],
     );
     if (rowCount === 0) throw notFound("Token not recognized");
-    res.json({ ok: true });
+    res.json({ success: true, data: { ok: true } });
   }),
 );

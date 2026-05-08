@@ -17,18 +17,20 @@ export const adminRouter: Router = Router();
 
 adminRouter.use(requireUser, requireAdmin);
 
+const NOW_SQL = "(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))";
+
 // ──────────────── Campuses ────────────────
 
 adminRouter.get(
   "/campuses",
   asyncHandler(async (_req, res) => {
     const { rows } = await pool.query(
-      `SELECT id, slug, name, timezone, service_window_start, service_window_end,
+      `SELECT id, slug, name, code, timezone, service_window_start, service_window_end,
               active, created_at, updated_at
          FROM campuses
         ORDER BY name`,
     );
-    res.json({ campuses: rows });
+    res.json({ success: true, data: { campuses: rows } });
   }),
 );
 
@@ -37,19 +39,21 @@ adminRouter.post(
   asyncHandler(async (req, res) => {
     const body = upsertCampusSchema.parse(req.body);
     const { rows } = await pool.query(
-      `INSERT INTO campuses (slug, name, timezone, service_window_start, service_window_end, active)
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6, TRUE))
+      `INSERT INTO campuses
+         (slug, name, code, timezone, service_window_start, service_window_end, active)
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 1))
        RETURNING *`,
       [
         body.slug,
         body.name,
+        body.code ?? null,
         body.timezone,
         body.service_window_start ?? null,
         body.service_window_end ?? null,
-        body.active ?? null,
+        body.active === undefined ? null : body.active ? 1 : 0,
       ],
     );
-    res.status(201).json({ campus: rows[0] });
+    res.status(201).json({ success: true, data: { campus: rows[0] } });
   }),
 );
 
@@ -63,6 +67,7 @@ adminRouter.patch(
       {
         slug: body.slug,
         name: body.name,
+        code: body.code,
         timezone: body.timezone,
         service_window_start: body.service_window_start,
         service_window_end: body.service_window_end,
@@ -72,12 +77,12 @@ adminRouter.patch(
     );
     if (!touched) throw badRequest("no fields to update");
     const { rows } = await pool.query(
-      `UPDATE campuses SET ${setClause}, updated_at = now()
+      `UPDATE campuses SET ${setClause}, updated_at = ${NOW_SQL}
         WHERE id = $1 RETURNING *`,
       [id, ...params],
     );
     if (rows.length === 0) throw notFound();
-    res.json({ campus: rows[0] });
+    res.json({ success: true, data: { campus: rows[0] } });
   }),
 );
 
@@ -93,7 +98,7 @@ adminRouter.get(
         : `SELECT * FROM status_types ORDER BY campus_id, sort_order, label`,
       campusId ? [campusId] : [],
     );
-    res.json({ status_types: rows });
+    res.json({ success: true, data: { status_types: rows } });
   }),
 );
 
@@ -104,7 +109,7 @@ adminRouter.post(
     const { rows } = await pool.query(
       `INSERT INTO status_types
          (campus_id, slug, label, default_message, color, icon, sort_order, active)
-       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 0), COALESCE($8, TRUE))
+       VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 0), COALESCE($8, 1))
        RETURNING *`,
       [
         body.campus_id,
@@ -114,10 +119,10 @@ adminRouter.post(
         body.color ?? null,
         body.icon ?? null,
         body.sort_order ?? null,
-        body.active ?? null,
+        body.active === undefined ? null : body.active ? 1 : 0,
       ],
     );
-    res.status(201).json({ status_type: rows[0] });
+    res.status(201).json({ success: true, data: { status_type: rows[0] } });
   }),
 );
 
@@ -141,12 +146,12 @@ adminRouter.patch(
     );
     if (!touched) throw badRequest("no fields to update");
     const { rows } = await pool.query(
-      `UPDATE status_types SET ${setClause}, updated_at = now()
+      `UPDATE status_types SET ${setClause}, updated_at = ${NOW_SQL}
         WHERE id = $1 RETURNING *`,
       [id, ...params],
     );
     if (rows.length === 0) throw notFound();
-    res.json({ status_type: rows[0] });
+    res.json({ success: true, data: { status_type: rows[0] } });
   }),
 );
 
@@ -162,7 +167,7 @@ adminRouter.get(
         : `SELECT * FROM subscriber_groups ORDER BY campus_id, name`,
       campusId ? [campusId] : [],
     );
-    res.json({ groups: rows });
+    res.json({ success: true, data: { groups: rows } });
   }),
 );
 
@@ -172,11 +177,16 @@ adminRouter.post(
     const body = upsertGroupSchema.parse(req.body);
     const { rows } = await pool.query(
       `INSERT INTO subscriber_groups (campus_id, slug, name, active)
-       VALUES ($1, $2, $3, COALESCE($4, TRUE))
+       VALUES ($1, $2, $3, COALESCE($4, 1))
        RETURNING *`,
-      [body.campus_id, body.slug, body.name, body.active ?? null],
+      [
+        body.campus_id,
+        body.slug,
+        body.name,
+        body.active === undefined ? null : body.active ? 1 : 0,
+      ],
     );
-    res.status(201).json({ group: rows[0] });
+    res.status(201).json({ success: true, data: { group: rows[0] } });
   }),
 );
 
@@ -196,12 +206,12 @@ adminRouter.patch(
     );
     if (!touched) throw badRequest("no fields to update");
     const { rows } = await pool.query(
-      `UPDATE subscriber_groups SET ${setClause}, updated_at = now()
+      `UPDATE subscriber_groups SET ${setClause}, updated_at = ${NOW_SQL}
         WHERE id = $1 RETURNING *`,
       [id, ...params],
     );
     if (rows.length === 0) throw notFound();
-    res.json({ group: rows[0] });
+    res.json({ success: true, data: { group: rows[0] } });
   }),
 );
 
@@ -220,7 +230,7 @@ adminRouter.get(
         ORDER BY t.created_at DESC`,
       campusId ? [campusId] : [],
     );
-    res.json({ tokens: rows });
+    res.json({ success: true, data: { tokens: rows } });
   }),
 );
 
@@ -241,7 +251,9 @@ adminRouter.post(
        RETURNING id, campus_id, label, prefix, last_used_at, revoked_at, created_at`,
       [body.campus_id, body.label, tokenHash, prefix, req.user!.id],
     );
-    res.status(201).json({ token: rows[0], plaintext: raw });
+    res
+      .status(201)
+      .json({ success: true, data: { token: rows[0], plaintext: raw } });
   }),
 );
 
@@ -251,13 +263,14 @@ adminRouter.post(
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) throw badRequest("invalid id");
     const { rows } = await pool.query(
-      `UPDATE api_tokens SET revoked_at = now()
+      `UPDATE api_tokens
+          SET revoked_at = ${NOW_SQL}
         WHERE id = $1 AND revoked_at IS NULL
         RETURNING id, prefix, revoked_at`,
       [id],
     );
     if (rows.length === 0) throw notFound("Token not found or already revoked");
-    res.json({ token: rows[0] });
+    res.json({ success: true, data: { token: rows[0] } });
   }),
 );
 
@@ -266,25 +279,58 @@ adminRouter.post(
 adminRouter.get(
   "/subscribers",
   asyncHandler(async (_req, res) => {
-    const { rows } = await pool.query(
+    // Two-pass fetch (subscribers + memberships separately) since SQLite
+    // doesn't have json_agg/array_agg. Group on the JS side.
+    const { rows: subscribers } = await pool.query<{
+      id: number;
+      email: string;
+      display_name: string;
+      active: number;
+      created_at: string;
+      device_count: number;
+    }>(
       `SELECT s.id, s.email, s.display_name, s.active, s.created_at,
-              COALESCE(
-                (SELECT json_agg(json_build_object(
-                          'campus_slug', c.slug,
-                          'group_slug', g.slug,
-                          'group_name', g.name))
-                   FROM subscriber_memberships sm
-                   JOIN subscriber_groups g ON g.id = sm.group_id
-                   JOIN campuses c          ON c.id = g.campus_id
-                  WHERE sm.subscriber_id = s.id),
-                '[]'::json
-              ) AS memberships,
-              (SELECT count(*) FROM push_subscriptions ps WHERE ps.subscriber_id = s.id)
+              (SELECT COUNT(*) FROM push_subscriptions ps WHERE ps.subscriber_id = s.id)
                 AS device_count
          FROM subscribers s
         ORDER BY s.created_at DESC`,
     );
-    res.json({ subscribers: rows });
+
+    const { rows: memberships } = await pool.query<{
+      subscriber_id: number;
+      campus_slug: string;
+      group_slug: string;
+      group_name: string;
+    }>(
+      `SELECT sm.subscriber_id,
+              c.slug AS campus_slug,
+              g.slug AS group_slug,
+              g.name AS group_name
+         FROM subscriber_memberships sm
+         JOIN subscriber_groups g ON g.id = sm.group_id
+         JOIN campuses c          ON c.id = g.campus_id`,
+    );
+
+    const byUser = new Map<
+      number,
+      { campus_slug: string; group_slug: string; group_name: string }[]
+    >();
+    for (const m of memberships) {
+      const arr = byUser.get(m.subscriber_id) ?? [];
+      arr.push({
+        campus_slug: m.campus_slug,
+        group_slug: m.group_slug,
+        group_name: m.group_name,
+      });
+      byUser.set(m.subscriber_id, arr);
+    }
+
+    const result = subscribers.map((s) => ({
+      ...s,
+      memberships: byUser.get(s.id) ?? [],
+    }));
+
+    res.json({ success: true, data: { subscribers: result } });
   }),
 );
 
@@ -311,6 +357,6 @@ adminRouter.get(
         LIMIT ${limit}`,
       campusId ? [campusId] : [],
     );
-    res.json({ history: rows });
+    res.json({ success: true, data: { history: rows } });
   }),
 );

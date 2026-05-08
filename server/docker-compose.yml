@@ -1,34 +1,16 @@
-# Local dev:
-#   docker compose up -d            → just Postgres; run the app with `npm run dev`.
+# Local dev: run the app directly with `npm run dev`. SQLite needs no
+# container; the file lives under ./tmp/dev.db by default.
 #
 # Full stack (matches the VMware target):
 #   docker compose --profile prod up -d --build
-#   docker compose --profile prod run --rm migrate   # one-shot migrations
-#   docker compose --profile prod run --rm seed      # one-shot seed
+#   docker compose --profile prod run --rm migrate    # one-shot migrations
+#   docker compose --profile prod run --rm seed       # one-shot seed
 #
 # Promote to the VMware Ubuntu/Docker host by copying this dir + .env and
 # running the same commands there. nginx listens on HTTP/80 only; terminate
-# TLS upstream (Cloudflare in front, recommended) or add a `listen 443` block
-# in nginx.conf and mount certs (see commented block at bottom of nginx.conf).
+# TLS upstream (Cloudflare) or uncomment the 443 sketch in nginx.conf.
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-service_progress}
-    ports:
-      - "5432:5432"
-    volumes:
-      - service_progress_pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-service_progress}"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   app:
     profiles: ["prod"]
     build: .
@@ -37,15 +19,14 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
-      # Inside the docker network the DB host is the service name.
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-service_progress}
+      DATABASE_PATH: /data/service-status.db
+    volumes:
+      - service_progress_data:/data
     depends_on:
-      postgres:
-        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     expose:
-      - "4000"
+      - "3000"
 
   migrate:
     profiles: ["prod", "migrate"]
@@ -54,11 +35,10 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-service_progress}
+      DATABASE_PATH: /data/service-status.db
     command: ["node", "dist/scripts/migrate.js"]
-    depends_on:
-      postgres:
-        condition: service_healthy
+    volumes:
+      - service_progress_data:/data
     restart: "no"
 
   seed:
@@ -68,11 +48,10 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-service_progress}
+      DATABASE_PATH: /data/service-status.db
     command: ["node", "dist/scripts/seed.js"]
-    depends_on:
-      postgres:
-        condition: service_healthy
+    volumes:
+      - service_progress_data:/data
     restart: "no"
 
   nginx:
@@ -94,4 +73,4 @@ services:
       - app
 
 volumes:
-  service_progress_pgdata:
+  service_progress_data:

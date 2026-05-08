@@ -23,12 +23,12 @@ statusRouter.get(
   "/campuses",
   asyncHandler(async (_req, res) => {
     const { rows } = await pool.query(
-      `SELECT id, slug, name, timezone
+      `SELECT id, slug, name, code, timezone
          FROM campuses
-        WHERE active = TRUE
+        WHERE active = 1
         ORDER BY name`,
     );
-    res.json({ campuses: rows });
+    res.json({ success: true, data: { campuses: rows } });
   }),
 );
 
@@ -40,7 +40,7 @@ statusRouter.get(
     const campus =
       typeof req.query.campus === "string" ? req.query.campus : undefined;
     const statuses = await fetchCurrentStatuses(pool, { campusSlug: campus });
-    res.json({ statuses });
+    res.json({ success: true, data: { statuses } });
   }),
 );
 
@@ -50,7 +50,7 @@ statusRouter.get(
     const campusSlug = req.params.campusSlug;
     const [status] = await fetchCurrentStatuses(pool, { campusSlug });
     if (!status) throw notFound("Campus not found");
-    res.json({ status });
+    res.json({ success: true, data: { status } });
   }),
 );
 
@@ -61,7 +61,7 @@ statusRouter.get(
     const campus = await fetchCampusBySlug(pool, req.params.slug ?? "");
     if (!campus) throw notFound("Campus not found");
     const types = await fetchStatusTypesForCampus(pool, campus.id);
-    res.json({ status_types: types });
+    res.json({ success: true, data: { status_types: types } });
   }),
 );
 
@@ -84,7 +84,7 @@ statusRouter.get(
         LIMIT 50`,
       [campus.id],
     );
-    res.json({ history: rows });
+    res.json({ success: true, data: { history: rows } });
   }),
 );
 
@@ -115,5 +115,5 @@ statusRouter.get(
 
 // Public VAPID key for the PWA's push registration flow.
 statusRouter.get("/push/public-key", (_req, res) => {
-  res.json({ key: vapidPublicKey() || null });
+  res.json({ success: true, data: { key: vapidPublicKey() || null } });
 });

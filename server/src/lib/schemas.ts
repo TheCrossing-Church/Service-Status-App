@@ -51,6 +51,7 @@ export const pushSubscriptionSchema = z.object({
 export const upsertCampusSchema = z.object({
   slug,
   name: z.string().min(1).max(128),
+  code: z.string().min(2).max(8).regex(/^[A-Z]+$/).nullable().optional(),
   timezone: z.string().min(1).max(64).default("America/Chicago"),
   service_window_start: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).nullable().optional(),
   service_window_end: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).nullable().optional(),

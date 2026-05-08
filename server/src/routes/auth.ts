@@ -27,10 +27,10 @@ authRouter.post(
           `INSERT INTO users (username, email, display_name, role, rock_person_id)
              VALUES ($1, $2, $3, 'sender', $4)
            ON CONFLICT (rock_person_id) DO UPDATE
-             SET username = EXCLUDED.username,
-                 email = EXCLUDED.email,
-                 display_name = EXCLUDED.display_name,
-                 updated_at = now()
+             SET username = excluded.username,
+                 email = excluded.email,
+                 display_name = excluded.display_name,
+                 updated_at = (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
              RETURNING id`,
           [username, rock.email, rock.displayName, rock.rockPersonId],
         );
@@ -42,7 +42,7 @@ authRouter.post(
       const { rows } = await pool.query<{
         id: number;
         password_hash: string | null;
-        active: boolean;
+        active: number;
       }>(
         `SELECT id, password_hash, active FROM users WHERE username = $1`,
         [username],
@@ -58,20 +58,20 @@ authRouter.post(
 
     const user = await loadUser(userId);
     const token = signUserToken(userId);
-    res.json({ token, user });
+    res.json({ success: true, data: { token, user } });
   }),
 );
 
 // JWTs are stateless — logout is a client-side concern (drop the token).
 // Endpoint exists so the frontend has a single, predictable place to call.
 authRouter.post("/logout", (_req, res) => {
-  res.json({ ok: true });
+  res.json({ success: true, data: { ok: true } });
 });
 
 authRouter.get(
   "/me",
   requireUser,
   asyncHandler(async (req, res) => {
-    res.json({ user: req.user });
+    res.json({ success: true, data: { user: req.user } });
   }),
 );

@@ -20,8 +20,8 @@ function int(name: string, fallback: number): number {
 
 export const env = {
   nodeEnv: optional("NODE_ENV", "development"),
-  port: int("PORT", 4000),
-  databaseUrl: required("DATABASE_URL"),
+  port: int("PORT", 3000),
+  databasePath: optional("DATABASE_PATH", "./tmp/dev.db"),
   // Used to sign JWTs. Must be ≥ 32 bytes in production. The fallback
   // exists to keep `npm run dev` working out of the box; warn loudly
   // anywhere that's not local development.

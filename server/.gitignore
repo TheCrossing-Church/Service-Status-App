@@ -4,3 +4,5 @@ dist/
 .env.local
 *.log
 .DS_Store
+# Local SQLite dev database (DATABASE_PATH default).
+tmp/

@@ -30,7 +30,10 @@ triggerRouter.post(
       message: req.body?.message,
     });
 
-    const { rows: campusRows } = await pool.query<{ id: number; active: boolean }>(
+    const { rows: campusRows } = await pool.query<{
+      id: number;
+      active: number;
+    }>(
       `SELECT id, active FROM campuses WHERE slug = $1`,
       [body.campus],
     );
@@ -58,33 +61,36 @@ triggerRouter.post(
     }
     if (matchedTokenId === null) throw unauthorized("Invalid token");
 
-    const { rows: stRows } = await pool.query<{ id: number; active: boolean }>(
-      `SELECT id, active FROM status_types
+    const { rows: stRows } = await pool.query<{
+      id: number;
+      active: number;
+      default_message: string | null;
+    }>(
+      `SELECT id, active, default_message FROM status_types
         WHERE campus_id = $1 AND slug = $2`,
       [campus.id, body.status],
     );
-    if (!stRows[0] || !stRows[0].active) throw notFound("Status type not found");
+    const st = stRows[0];
+    if (!st || !st.active) throw notFound("Status type not found");
 
     // Default message lookup happens at the type level; webhooks are atomic
     // (no freeform per PRD), but if a default_message is configured we use it.
-    const { rows: defaultRows } = await pool.query<{ default_message: string | null }>(
-      `SELECT default_message FROM status_types WHERE id = $1`,
-      [stRows[0].id],
-    );
-    const message = body.message ?? defaultRows[0]?.default_message ?? null;
+    const message = body.message ?? st.default_message ?? null;
 
     await pool.query(
-      `UPDATE api_tokens SET last_used_at = now() WHERE id = $1`,
+      `UPDATE api_tokens
+          SET last_used_at = (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        WHERE id = $1`,
       [matchedTokenId],
     );
 
     const result = await publishStatusUpdate({
       campusId: campus.id,
-      statusTypeId: stRows[0].id,
+      statusTypeId: st.id,
       message,
       sentVia: "webhook",
       apiTokenId: matchedTokenId,
     });
-    res.status(201).json(result);
+    res.status(201).json({ success: true, data: result });
   }),
 );
