@@ -9,9 +9,8 @@ and volunteers via push notification and a live status webpage. Designed to
 be faster and simpler than Teams for in-service communication.
 
 Built during the **Church IT Network AI Context Engineering workshop** as
-a working artifact. Repo visibility is currently private; some sections of
-this doc are clearly marked "org-specific" so a future redaction pass for
-broader sharing is straightforward.
+a working artifact. Repo is public — feel free to fork. See
+[`BRANDING.md`](BRANDING.md) for swapping the icon set for your own org.
 
 ## Quick reference
 
