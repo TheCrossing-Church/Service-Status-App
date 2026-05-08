@@ -1,0 +1,19 @@
+{
+  "name": "Service Status — The Crossing",
+  "short_name": "Service Status",
+  "description": "Real-time service progress updates for The Crossing.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
