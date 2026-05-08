@@ -98,6 +98,16 @@ export const api = {
     request<{ history: HistoryEntry[] }>(
       `/api/campuses/${encodeURIComponent(campusSlug)}/history`,
     ),
+  groups: () =>
+    request<{
+      groups: {
+        id: number;
+        slug: string;
+        name: string;
+        campus_slug: string;
+        campus_name: string;
+      }[];
+    }>("/api/groups"),
   vapidPublicKey: () =>
     request<{ key: string | null }>("/api/push/public-key"),
 

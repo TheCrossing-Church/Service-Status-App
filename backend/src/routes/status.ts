@@ -65,6 +65,23 @@ statusRouter.get(
   }),
 );
 
+// Active subscriber groups — used by the public Subscribe page to render
+// the campus/group picker. Read-only; returns all active groups across
+// all active campuses so the page can render the full matrix in one call.
+statusRouter.get(
+  "/groups",
+  asyncHandler(async (_req, res) => {
+    const { rows } = await pool.query(
+      `SELECT g.id, g.slug, g.name, c.slug AS campus_slug, c.name AS campus_name
+         FROM subscriber_groups g
+         JOIN campuses c ON c.id = g.campus_id
+        WHERE g.active = 1 AND c.active = 1
+        ORDER BY c.name, g.name`,
+    );
+    res.json({ success: true, data: { groups: rows } });
+  }),
+);
+
 // Send history (public read of recent updates per campus) — capped at last 50.
 statusRouter.get(
   "/campuses/:slug/history",

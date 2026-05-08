@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api/client";
 import { ensurePushSubscription } from "../pwa/push";
-import type { Campus, SubscriberGroup } from "../api/types";
+import type { Campus } from "../api/types";
+
+type GroupRow = {
+  id: number;
+  slug: string;
+  name: string;
+  campus_slug: string;
+  campus_name: string;
+};
 
 // Self-enrollment for staff/volunteers (PRD §4). Pick campuses, then
 // per-campus pick groups, submit, and (optionally) grant push permission.
@@ -9,7 +17,9 @@ export default function SubscribePage() {
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [campuses, setCampuses] = useState<Campus[]>([]);
-  const [groups, setGroups] = useState<SubscriberGroup[]>([]);
+  const [groupsByCampus, setGroupsByCampus] = useState<
+    Record<string, GroupRow[]>
+  >({});
   const [selected, setSelected] = useState<
     Record<string, Set<string>>
   >({});
@@ -22,27 +32,17 @@ export default function SubscribePage() {
   } | null>(null);
 
   useEffect(() => {
-    Promise.all([api.campuses(), fetchAllGroups()])
-      .then(([{ campuses }, gs]) => {
+    Promise.all([api.campuses(), api.groups()])
+      .then(([{ campuses }, { groups }]) => {
         setCampuses(campuses);
-        setGroups(gs);
+        const byCampus: Record<string, GroupRow[]> = {};
+        for (const g of groups) {
+          (byCampus[g.campus_slug] ??= []).push(g);
+        }
+        setGroupsByCampus(byCampus);
       })
       .catch((err: Error) => setError(err.message));
   }, []);
-
-  async function fetchAllGroups(): Promise<SubscriberGroup[]> {
-    // Public groups list isn't an admin route, so we hit one campus at a
-    // time via the public status-types endpoint? — actually groups aren't
-    // public yet. The simplest path: ask the backend admin endpoint.
-    // For v1 enrollment we synthesize groups from a hardcoded default
-    // (matches the seeded default; admin-customized labels still work
-    // because we submit by slug). This avoids exposing the admin endpoint.
-    return [
-      { id: -1, campus_id: -1, slug: "in-service", name: "In-Service Staff & Volunteers", active: 1 },
-      { id: -2, campus_id: -1, slug: "hospitality", name: "Hospitality Staff & Volunteers", active: 1 },
-      { id: -3, campus_id: -1, slug: "kids", name: "Kids Staff & Volunteers", active: 1 },
-    ];
-  }
 
   function toggle(campusSlug: string, groupSlug: string): void {
     setSelected((prev) => {
@@ -152,32 +152,40 @@ export default function SubscribePage() {
             Campuses & groups
           </legend>
           <div className="space-y-3">
-            {campuses.map((c) => (
-              <div
-                key={c.slug}
-                className="bg-white border border-slate-200 rounded-md p-3"
-              >
-                <div className="font-semibold text-slate-900 mb-2">
-                  {c.name}
+            {campuses.map((c) => {
+              const campusGroups = groupsByCampus[c.slug] ?? [];
+              return (
+                <div
+                  key={c.slug}
+                  className="bg-white border border-slate-200 rounded-md p-3"
+                >
+                  <div className="font-semibold text-slate-900 mb-2">
+                    {c.name}
+                  </div>
+                  <div className="space-y-1.5">
+                    {campusGroups.length === 0 && (
+                      <p className="text-xs text-slate-500">
+                        No groups configured.
+                      </p>
+                    )}
+                    {campusGroups.map((g) => (
+                      <label
+                        key={`${c.slug}-${g.slug}`}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          className="rounded"
+                          checked={selected[c.slug]?.has(g.slug) ?? false}
+                          onChange={() => toggle(c.slug, g.slug)}
+                        />
+                        <span>{g.name}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  {groups.map((g) => (
-                    <label
-                      key={`${c.slug}-${g.slug}`}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        className="rounded"
-                        checked={selected[c.slug]?.has(g.slug) ?? false}
-                        onChange={() => toggle(c.slug, g.slug)}
-                      />
-                      <span>{g.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </fieldset>
 
