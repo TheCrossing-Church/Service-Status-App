@@ -64,9 +64,12 @@ services:
       # - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      # Frontend build mount — currently a placeholder index.html until the
-      # React PWA build pipeline lands; then point this at frontend/dist.
-      - ./web:/usr/share/nginx/html:ro
+      # Frontend build mount. PREREQ: run `(cd ../frontend && npm ci && npm run build)`
+      # before `docker compose --profile prod up` — nginx serves whatever is at
+      # ../frontend/dist relative to this compose file. If the directory does not
+      # exist, nginx will 404 the SPA. The `./web/` placeholder is kept around
+      # for any future use but is no longer mounted.
+      - ../frontend/dist:/usr/share/nginx/html:ro
       # Uncomment when running a certbot sidecar:
       # - ./letsencrypt:/etc/letsencrypt:ro
     depends_on:
