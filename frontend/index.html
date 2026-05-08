@@ -10,6 +10,10 @@
     <!-- Apple PWA. Real PNG home-screen icons should replace this SVG when
          brand assets are available; iOS ≥ 16 honors SVG apple-touch-icon. -->
     <link rel="apple-touch-icon" href="/icon.svg" />
+    <!-- mobile-web-app-capable is the modern equivalent; iOS still reads
+         the apple- prefix, so we ship both. Chrome dev tools warns if only
+         the apple- form is present. -->
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Service Status — The Crossing</title>

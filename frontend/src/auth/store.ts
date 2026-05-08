@@ -14,14 +14,29 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+// Cache the parsed result so useSyncExternalStore's getSnapshot returns the
+// same reference when nothing has changed. Without this, JSON.parse produces
+// a fresh object every call, React sees a "change" each render, and Shell's
+// useUser() drives an infinite re-render loop the moment a user is signed in.
+// Sentinel object distinguishes "never read" from "read and got null".
+const UNREAD = {};
+let cachedRaw: string | null | typeof UNREAD = UNREAD;
+let cachedUser: CurrentUser | null = null;
+
 export function getCachedUser(): CurrentUser | null {
   const raw = localStorage.getItem(USER_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as CurrentUser;
-  } catch {
+  if (raw === cachedRaw) return cachedUser;
+  cachedRaw = raw;
+  if (!raw) {
+    cachedUser = null;
     return null;
   }
+  try {
+    cachedUser = JSON.parse(raw) as CurrentUser;
+  } catch {
+    cachedUser = null;
+  }
+  return cachedUser;
 }
 
 export function setSession(token: string, user: CurrentUser): void {
