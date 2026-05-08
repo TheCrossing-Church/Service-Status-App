@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api, ApiError } from "../api/client";
 import { setSession } from "../auth/store";
 import { useUser } from "../auth/useUser";
@@ -14,12 +14,14 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   // If already signed in, send them back where they came from (or to /send).
+  // Return <Navigate> as the element instead of calling navigate() during
+  // render — calling navigate during rendering is a React anti-pattern that
+  // can fire twice under StrictMode and warn in dev.
   if (user) {
     const dest =
       (location.state as { from?: string } | null)?.from ??
       (user.role === "admin" ? "/admin" : "/send");
-    navigate(dest, { replace: true });
-    return null;
+    return <Navigate to={dest} replace />;
   }
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
