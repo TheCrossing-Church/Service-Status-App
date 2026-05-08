@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { db } from "../src/db.js";
 
-// Resolve from cwd so this works in both layouts: local (run from server/)
+// Resolve from cwd so this works in both layouts: local (run from backend/)
 // and the prod container (WORKDIR /app, with /app/migrations alongside dist/).
 const migrationsDir = path.resolve(process.cwd(), "migrations");
 
