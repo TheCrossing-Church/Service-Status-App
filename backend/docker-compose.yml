@@ -1,0 +1,79 @@
+# Local dev: run the app directly with `npm run dev`. SQLite needs no
+# container; the file lives under ./tmp/dev.db by default.
+#
+# Full stack (matches the VMware target):
+#   docker compose --profile prod up -d --build
+#   docker compose --profile prod run --rm migrate    # one-shot migrations
+#   docker compose --profile prod run --rm seed       # one-shot seed
+#
+# Promote to the VMware Ubuntu/Docker host by copying this dir + .env and
+# running the same commands there. nginx listens on HTTP/80 only; terminate
+# TLS upstream (Cloudflare) or uncomment the 443 sketch in nginx.conf.
+
+services:
+  app:
+    profiles: ["prod"]
+    build: .
+    image: service-progress-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_PATH: /data/service-status.db
+    volumes:
+      - service_progress_data:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "3000"
+
+  migrate:
+    profiles: ["prod", "migrate"]
+    build: .
+    image: service-progress-app
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_PATH: /data/service-status.db
+    command: ["node", "dist/scripts/migrate.js"]
+    volumes:
+      - service_progress_data:/data
+    restart: "no"
+
+  seed:
+    profiles: ["seed"]
+    build: .
+    image: service-progress-app
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_PATH: /data/service-status.db
+    command: ["node", "dist/scripts/seed.js"]
+    volumes:
+      - service_progress_data:/data
+    restart: "no"
+
+  nginx:
+    profiles: ["prod"]
+    image: nginx:1-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      # Uncomment when terminating TLS at nginx (certbot or manual certs):
+      # - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # Frontend build mount. PREREQ: run `(cd ../frontend && npm ci && npm run build)`
+      # before `docker compose --profile prod up` — nginx serves whatever is at
+      # ../frontend/dist relative to this compose file. If the directory does not
+      # exist, nginx will 404 the SPA. The `./web/` placeholder is kept around
+      # for any future use but is no longer mounted.
+      - ../frontend/dist:/usr/share/nginx/html:ro
+      # Uncomment when running a certbot sidecar:
+      # - ./letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - app
+
+volumes:
+  service_progress_data:
