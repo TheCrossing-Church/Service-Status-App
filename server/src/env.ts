@@ -22,8 +22,12 @@ export const env = {
   nodeEnv: optional("NODE_ENV", "development"),
   port: int("PORT", 4000),
   databaseUrl: required("DATABASE_URL"),
-  sessionSecret: optional("SESSION_SECRET", "dev-secret-change-me"),
-  sessionMaxAgeMs: int("SESSION_MAX_AGE_MS", 12 * 60 * 60 * 1000),
+  // Used to sign JWTs. Must be ≥ 32 bytes in production. The fallback
+  // exists to keep `npm run dev` working out of the box; warn loudly
+  // anywhere that's not local development.
+  jwtSecret: optional("JWT_SECRET", "dev-jwt-secret-change-me"),
+  // jsonwebtoken accepts strings like "12h", "7d", or a number of seconds.
+  jwtExpiresIn: optional("JWT_EXPIRES_IN", "12h"),
   corsOrigins: optional("CORS_ORIGINS")
     .split(",")
     .map((s) => s.trim())
@@ -36,3 +40,9 @@ export const env = {
 };
 
 export const isProd = env.nodeEnv === "production";
+
+if (isProd && env.jwtSecret === "dev-jwt-secret-change-me") {
+  throw new Error(
+    "JWT_SECRET must be set in production. Generate one with `openssl rand -base64 48`.",
+  );
+}

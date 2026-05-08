@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import { Router } from "express";
-import { loadUser, requireUser } from "../auth.js";
+import { loadUser, requireUser, signUserToken } from "../auth.js";
 import { pool } from "../db.js";
 import { asyncHandler } from "../lib/asyncHandler.js";
 import { unauthorized } from "../lib/httpError.js";
@@ -56,17 +56,16 @@ authRouter.post(
 
     if (userId === null) throw unauthorized("Invalid credentials");
 
-    req.session.userId = userId;
     const user = await loadUser(userId);
-    res.json({ user });
+    const token = signUserToken(userId);
+    res.json({ token, user });
   }),
 );
 
-authRouter.post("/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.clearCookie("connect.sid");
-    res.json({ ok: true });
-  });
+// JWTs are stateless — logout is a client-side concern (drop the token).
+// Endpoint exists so the frontend has a single, predictable place to call.
+authRouter.post("/logout", (_req, res) => {
+  res.json({ ok: true });
 });
 
 authRouter.get(

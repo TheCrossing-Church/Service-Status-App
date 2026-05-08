@@ -1,16 +1,13 @@
-import connectPgSimple from "connect-pg-simple";
-import cookieParser from "cookie-parser";
 import express, {
   type ErrorRequestHandler,
   type NextFunction,
   type Request,
   type Response,
 } from "express";
-import session from "express-session";
 import helmet from "helmet";
 import { ZodError } from "zod";
 import { pool } from "./db.js";
-import { env, isProd } from "./env.js";
+import { env } from "./env.js";
 import { HttpError } from "./lib/httpError.js";
 import { adminRouter } from "./routes/admin.js";
 import { authRouter } from "./routes/auth.js";
@@ -25,13 +22,14 @@ app.set("trust proxy", 1);
 // Helmet defaults are fine for an API; we relax CSP since we don't serve HTML.
 app.use(helmet({ contentSecurityPolicy: false }));
 
-// Allow-list CORS for the PWA dev origins, with credentials so session cookies work.
+// Allow-list CORS for the PWA dev origins. Auth is via Bearer header, so
+// we don't need credentialed requests — but still echo the origin and Vary
+// so dev tooling behaves.
 app.use((req, res, next) => {
   const origin = req.header("origin");
   if (origin && env.corsOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
     res.setHeader(
       "Access-Control-Allow-Methods",
       "GET, POST, PATCH, DELETE, OPTIONS",
@@ -49,24 +47,6 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: "100kb" }));
-app.use(cookieParser());
-
-const PgSessionStore = connectPgSimple(session);
-app.use(
-  session({
-    store: new PgSessionStore({ pool, tableName: "session" }),
-    secret: env.sessionSecret,
-    resave: false,
-    saveUninitialized: false,
-    rolling: true,
-    cookie: {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: "lax",
-      maxAge: env.sessionMaxAgeMs,
-    },
-  }),
-);
 
 // Disallow indexing for the entire API surface (status page lives here too).
 app.use((_req, res, next) => {
