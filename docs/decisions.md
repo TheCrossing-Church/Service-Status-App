@@ -249,6 +249,49 @@ Bearer-vs-cookie decision is independently load-bearing for CORS and SSE.
 
 ---
 
+## 11. Collect email despite no email delivery (yet) — *Anchored*
+
+**Context.** The Get Notified page (`/subscribe`) requires an email even
+though v1 is push-only. Audited 2026-05-08; the implicit choice is now
+explicit.
+
+**Why we collect it.**
+- **Identity / dedup.** Same person subscribing from a phone *and* a
+  laptop merges into one `subscribers` row with two
+  `push_subscriptions` rows. The push-registration step
+  (`POST /api/subscribers/push`) takes email and joins to the existing
+  subscriber.
+- **Admin visibility.** `/admin/subscribers` shows a human-readable
+  list. Admins recognize "shawnr@thecrossing.church" faster than an
+  opaque ID.
+- **Future-channel option.** The data model is ready if email or SMS
+  delivery is added later (PRD §"What Is NOT In Scope" defers them but
+  doesn't rule them out forever). The `unsubscribe_token` column already
+  exists for one-click unsubscribe via emailed link.
+
+**What we gave up.**
+- A "no PII collected" posture. For an internal church tool the cost is
+  low — admins know who's subscribed, which is appropriate.
+- Friction at signup. Mitigated by helper text under the email field
+  explicitly saying "we don't send email — push only."
+
+**SSO note.** When Rock RMS or M365 SSO lands for subscribers, email
+becomes a derived attribute from the IdP, not a self-entered form
+field. Same data model; different input source. Self-service email
+collection is a bridge, not a forever choice.
+
+**Don't accidentally undo.** A future cleanup pass might see "email
+column unused at runtime" and try to remove it. It's not unused — it's
+the join key for push registration and the human-readable identifier
+in admin. The decision pre-dates this audit and is now documented.
+
+**Trigger to revisit.** Form-based input becomes unreliable enough
+(typos, fake addresses, drop-off rate) AND we still don't have
+email-send capability. At that point the simpler refactor is to use
+the `unsubscribe_token` as the device-join key and make email optional.
+
+---
+
 ## Process / convention decisions
 
 These aren't tech-stack picks but are still worth anchoring.
