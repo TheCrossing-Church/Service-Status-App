@@ -80,3 +80,7 @@ export const createTokenSchema = z.object({
   campus_id: z.number().int().positive(),
   label: z.string().min(1).max(128),
 });
+
+export const unsubscribeSchema = z.object({
+  token: z.string().min(1).max(256),
+});

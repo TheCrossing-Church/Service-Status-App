@@ -6,6 +6,7 @@ import { badRequest, notFound } from "../lib/httpError.js";
 import {
   pushSubscriptionSchema,
   subscribeEnrollSchema,
+  unsubscribeSchema,
 } from "../lib/schemas.js";
 
 export const subscribersRouter: Router = Router();
@@ -145,8 +146,7 @@ subscribersRouter.post(
 subscribersRouter.post(
   "/subscribers/unsubscribe",
   asyncHandler(async (req, res) => {
-    const token = String(req.body?.token ?? "");
-    if (!token) throw badRequest("token is required");
+    const { token } = unsubscribeSchema.parse(req.body);
     const { rowCount } = await pool.query(
       `UPDATE subscribers
           SET active = 0,
