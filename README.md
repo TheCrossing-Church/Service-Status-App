@@ -11,8 +11,7 @@ in-service communication.
 
 Node.js + Express + SQLite backend; React + TypeScript + Tailwind PWA
 frontend; Web Push (VAPID); Server-Sent Events; JWT auth (with Rock RMS
-strategy); nginx reverse proxy; Docker Compose. Targets a single Ubuntu
-Server LTS VM on VMware.
+strategy); nginx reverse proxy; Docker Compose.
 
 ## Quick start — local dev
 
@@ -42,7 +41,16 @@ Then visit http://localhost:5173. Bootstrap admin login: `admin` /
 
 ## Quick start — production stack (Docker)
 
-Mirrors the deployed environment. From the `backend/` directory:
+Runs on any Linux host with Docker + Docker Compose installed — bare
+metal, any hypervisor (VMware, Hyper-V, KVM, Proxmox), or a cloud VM
+(EC2, GCE, DigitalOcean, Hetzner, etc.). The Crossing deploys to an
+Ubuntu Server LTS VM on VMware, but nothing in this stack is
+VMware-specific. The same `docker compose --profile prod up` command
+also runs locally on Docker Desktop (macOS / Windows) — what you
+verify locally is what runs in production, just rebuilt for the host
+architecture.
+
+From the `backend/` directory:
 
 ```bash
 # Build the frontend (the prod profile mounts ../frontend/dist into nginx)
