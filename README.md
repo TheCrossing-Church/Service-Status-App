@@ -83,6 +83,7 @@ Data persists in the `service_progress_data` Docker volume between runs.
 | [`docs/operations.md`](docs/operations.md) | Runbook — first-time deploy, updates, backup, restore, incident response |
 | [`docs/working-with-ai.md`](docs/working-with-ai.md) | Norms for any AI assistant (autonomy tiers, anti-patterns, memory protocol) |
 | [`docs/domain/`](docs/domain) | Org-specific domain knowledge (Rock RMS, campus workflows, network topology) |
+| [`BRANDING.md`](BRANDING.md) | How to swap the icon set and PWA branding when forking |
 | [`service-status-app-prd.md`](service-status-app-prd.md) | Original product requirements document |
 
 ## License
