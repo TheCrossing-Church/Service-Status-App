@@ -6,9 +6,10 @@
 #   docker compose --profile prod run --rm migrate   # one-shot migrations
 #   docker compose --profile prod run --rm seed      # one-shot seed
 #
-# Promote to the VMware Ubuntu/Docker host by copying this file + .env and
-# running the same commands there. Caddy auto-provisions Let's Encrypt certs
-# when DOMAIN is a real hostname; with DOMAIN=localhost it serves a self-signed cert.
+# Promote to the VMware Ubuntu/Docker host by copying this dir + .env and
+# running the same commands there. nginx listens on HTTP/80 only; terminate
+# TLS upstream (Cloudflare in front, recommended) or add a `listen 443` block
+# in nginx.conf and mount certs (see commented block at bottom of nginx.conf).
 
 services:
   postgres:
@@ -74,24 +75,23 @@ services:
         condition: service_healthy
     restart: "no"
 
-  caddy:
+  nginx:
     profiles: ["prod"]
-    image: caddy:2-alpine
+    image: nginx:1-alpine
     restart: unless-stopped
-    environment:
-      DOMAIN: ${DOMAIN:-localhost}
-      CADDY_EMAIL: ${CADDY_EMAIL:-it@thecrossing.church}
     ports:
       - "80:80"
-      - "443:443"
+      # Uncomment when terminating TLS at nginx (certbot or manual certs):
+      # - "443:443"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # Frontend build mount — currently a placeholder index.html until the
+      # React PWA build pipeline lands; then point this at frontend/dist.
+      - ./web:/usr/share/nginx/html:ro
+      # Uncomment when running a certbot sidecar:
+      # - ./letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - app
 
 volumes:
   service_progress_pgdata:
-  caddy_data:
-  caddy_config:

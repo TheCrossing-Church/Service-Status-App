@@ -9,4 +9,5 @@ dist
 docker-compose.yml
 Dockerfile
 .dockerignore
-Caddyfile
+nginx.conf
+web
